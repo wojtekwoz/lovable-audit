@@ -11,6 +11,7 @@ Paste a URL, get a markdown report listing the security issues your app has befo
 - **Exposed secrets in JS bundles** — OpenAI / Anthropic / Stripe / AWS / Google keys, Supabase `service_role` JWTs
 - **TLS/HSTS** — cert validity, HSTS presence and `max-age`
 - **DNS hygiene** — SPF + DMARC (only if the domain has mail)
+- **Claude review** (optional) — Sonnet 4.6 reads your JS bundles and flags insecure patterns regex can't catch: client-side role checks, leaked AI system prompts, dangerous sinks. Set `ANTHROPIC_API_KEY` to enable; otherwise skipped.
 
 ## What it does NOT check
 
@@ -47,6 +48,19 @@ Options:
 - `-v, --verbose` — print full evidence to the terminal
 
 Exit codes: `0` clean, `1` at least one HIGH, `2` at least one CRITICAL.
+
+## HTTP server (for Lovable UI wrapper)
+
+```bash
+pip install -e '.[server]'
+uvicorn lovable_audit.server:app --reload
+```
+
+Endpoints:
+- `GET /healthz` → `{"status":"ok"}`
+- `POST /scan` with `{"url": "..."}` → streams SSE events (`check` per completed check, final `report` with markdown)
+
+CORS is open by default so you can call it from a Lovable preview domain.
 
 ## Tests
 

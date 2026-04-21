@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from .checks import cors, dns, headers, secrets, tls
+from .checks import cors, dns, headers, llm_review, secrets, tls
 from .models import CheckResult, Finding, ScanResult, Severity
 
 __all__ = ["CheckResult", "Finding", "ScanResult", "Severity", "scan"]
@@ -16,6 +16,7 @@ CHECKS = [
     ("Exposed secrets", secrets.run),
     ("TLS/HSTS", tls.run),
     ("DNS hygiene", dns.run),
+    ("Claude review", llm_review.run),
 ]
 
 

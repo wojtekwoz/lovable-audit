@@ -12,6 +12,10 @@ dependencies = [
     "click>=8.1",
 ]
 
+[project.optional-dependencies]
+llm = ["anthropic>=0.40"]
+server = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "anthropic>=0.40"]
+
 [project.scripts]
 lovable-audit = "lovable_audit.cli:main"
 
