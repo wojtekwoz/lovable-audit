@@ -1,0 +1,103 @@
+# Raport Audytu Bezpieczeństwa — {{ url }}
+## Wersja automatyczna (FREE)
+
+**Data:** {{ date }}
+**Cel:** Automated pre-launch scan (black-box, URL-only)
+**Narzędzie:** lovable-audit
+
+---
+
+## Podsumowanie Wykonawcze
+
+Przeskanowano **{{ url }}**. Znaleziono **{{ result.findings|length }}** podatności.
+
+### Klasyfikacja Ryzyka
+
+| Poziom | Liczba znalezisk |
+|--------|-----------------|
+{% for sev in severity_order %}
+{% if grouped[sev] %}
+| {{ severity_pl[sev]|upper }} | {{ grouped[sev]|length }} |
+{% endif %}
+{% endfor %}
+
+{% if result.count('CRITICAL') > 0 or result.count('HIGH') > 0 %}
+**Zalecenie:** Nie wdrażaj do produkcji przed naprawą znalezisk CRITICAL i HIGH.
+{% else %}
+**Zalecenie:** Podstawowa higiena OK. Pamiętaj — to tylko black-box scan (patrz niżej: co NIE jest sprawdzane).
+{% endif %}
+
+---
+
+## Odkryte Podatności
+
+{% for sev in severity_order %}
+{% if grouped[sev] %}
+### {{ severity_pl[sev] }} ({{ grouped[sev]|length }})
+
+| # | Nazwa | CVSS | Evidence |
+|---|-------|------|----------|
+{% for f in grouped[sev] %}
+| {{ f.id }} | {{ f.title }} | {{ f.cvss or '—' }} | {{ f.evidence }} |
+{% endfor %}
+
+**Rekomendacje:**
+
+{% for f in grouped[sev] %}
+- **{{ f.id }}** — {{ f.recommendation }}
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+
+---
+
+## Status Checków
+
+| Check | Status |
+|-------|--------|
+{% for c in result.checks %}
+{% if c.error %}
+| {{ c.name }} | BŁĄD: {{ c.error }} |
+{% elif c.skipped %}
+| {{ c.name }} | Pominięty ({{ c.skip_reason }}) |
+{% elif c.findings %}
+| {{ c.name }} | {{ c.findings|length }} znalezisk |
+{% else %}
+| {{ c.name }} | OK |
+{% endif %}
+{% endfor %}
+
+---
+
+## Co NIE jest sprawdzane automatycznie
+
+To narzędzie wykonuje tylko black-box scan (sam URL, bez logowania). Nie wykrywa:
+
+- **Obejścia monetyzacji** — limity generowania/projektów egzekwowane po stronie klienta (wymaga zalogowanego konta)
+- **Stored XSS** — wstrzyknięcie HTML/JS w pola formularzy (wymaga testowania ręcznego)
+- **Eskalacji uprawnień** — manipulacja JWT, rolami (wymaga zalogowanego konta)
+- **Prompt injection** — wycieki system promptu przez pola AI (phase 2)
+- **Brute force / rate limiting** — ochrona logowania i rejestracji (wymaga testów autoryzowanych)
+- **Row Level Security** — poprawność polityk RLS w Supabase (wymaga anon key + testów)
+
+Dla tych kategorii: zleć pełny audyt (manual pentest) albo zapytaj w społeczności Vibe Hero.
+
+---
+
+## Następne Kroki
+
+{% if result.count('CRITICAL') > 0 %}
+1. **P0** — napraw wszystkie znaleziska CRITICAL (przede wszystkim wyeksponowane klucze API).
+{% endif %}
+{% if result.count('HIGH') > 0 %}
+2. **P1** — uzupełnij nagłówki bezpieczeństwa i popraw CORS (HIGH).
+{% endif %}
+{% if result.count('MEDIUM') > 0 %}
+3. **P2** — adresuj znaleziska MEDIUM przed publicznym launchem.
+{% endif %}
+4. Po poprawkach: uruchom `lovable-audit` ponownie i potwierdź, że wszystko na zielono.
+
+---
+
+*Raport wygenerowany automatycznie. To nie zastępuje pełnego audytu bezpieczeństwa.*
