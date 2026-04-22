@@ -18,6 +18,7 @@ server = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "anthropic>=0.40"]
 
 [project.scripts]
 lovable-audit = "lovable_audit.cli:main"
+lovable-audit-serve = "lovable_audit.serve:main"
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -49,18 +49,26 @@ Options:
 
 Exit codes: `0` clean, `1` at least one HIGH, `2` at least one CRITICAL.
 
-## HTTP server (for Lovable UI wrapper)
+## Web UI (local)
 
-```bash
-pip install -e '.[server]'
-uvicorn lovable_audit.server:app --reload
-```
+There's a Lovable-built frontend that talks to a local backend:
 
-Endpoints:
+1. Install server deps: `pip install -e '.[server]'`
+2. Start the backend: `lovable-audit-serve` (listens on `127.0.0.1:8000`)
+3. Open the UI — see [`LOVABLE_PROMPT.md`](LOVABLE_PROMPT.md) for the prompt to generate it in [lovable.dev](https://lovable.dev)
+
+The UI lets you paste a URL, configure advanced options, and watch checks complete in real time.
+
+### HTTP API
+
 - `GET /healthz` → `{"status":"ok"}`
-- `POST /scan` with `{"url": "..."}` → streams SSE events (`check` per completed check, final `report` with markdown)
+- `POST /scan` body:
+  ```json
+  {"url": "...", "credentials": "email:password", "aggressive": false, "supabase_key": null, "skip": []}
+  ```
+  Returns `text/event-stream` — one event per check, final event is the markdown report.
 
-CORS is open by default so you can call it from a Lovable preview domain.
+CORS is open (`*`) so a Lovable preview domain can call it without setup.
 
 ## Tests
 
