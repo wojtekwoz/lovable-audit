@@ -28,4 +28,4 @@ build-backend = "setuptools.build_meta"
 include = ["lovable_audit*"]
 
 [tool.setuptools.package-data]
-lovable_audit = ["templates/*.j2"]
+lovable_audit = ["templates/*.j2", "static/*.html"]

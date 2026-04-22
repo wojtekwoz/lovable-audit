@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>lovable-audit</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #131313;
+    --surface-2: #1c1c1c;
+    --border: #2a2a2a;
+    --text: #e5e5e5;
+    --text-dim: #888;
+    --accent: #10b981;
+    --accent-dim: #065f46;
+    --critical: #dc2626;
+    --high: #f59e0b;
+    --medium: #eab308;
+    --low: #6b7280;
+    --mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 40px 24px;
+    line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  header { margin-bottom: 32px; }
+  h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .tagline { color: var(--text-dim); font-size: 14px; margin-top: 4px; }
+  .tagline a { color: var(--text-dim); text-decoration: underline; }
+
+  .banner {
+    background: #7f1d1d; color: #fecaca; padding: 12px 16px;
+    border-radius: 8px; margin-bottom: 24px; font-size: 14px;
+  }
+  .banner code { background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: var(--mono); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; margin-bottom: 20px;
+  }
+
+  form label { display: block; font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
+  form .hint { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  input[type=text], input[type=url] {
+    width: 100%; padding: 10px 12px; font-size: 14px;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: var(--mono);
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+
+  details { margin-top: 16px; }
+  details summary { cursor: pointer; font-size: 13px; color: var(--text-dim); padding: 8px 0; user-select: none; }
+  details[open] summary { margin-bottom: 12px; }
+
+  .toggle { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 12px; background: var(--surface-2); border-radius: 6px; }
+  .toggle input { accent-color: var(--accent); width: 18px; height: 18px; cursor: pointer; }
+  .toggle label { margin: 0; color: var(--text); cursor: pointer; font-weight: 500; }
+  .toggle .hint { margin-top: 2px; }
+
+  button {
+    width: 100%; padding: 12px 20px; font-size: 15px; font-weight: 600;
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    cursor: pointer; margin-top: 20px;
+    transition: background 0.15s;
+  }
+  button:hover:not(:disabled) { background: #059669; }
+  button:disabled { background: var(--accent-dim); color: #a7f3d0; cursor: not-allowed; }
+
+  .results { display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+  @media (max-width: 860px) { .results { grid-template-columns: 1fr; } }
+
+  .checklist { padding: 16px; }
+  .checklist h2 { font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+  .check-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .check-item:last-child { border-bottom: none; }
+  .check-icon { font-family: var(--mono); width: 20px; text-align: center; flex-shrink: 0; }
+  .check-name { flex: 1; }
+  .check-badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600;
+    font-family: var(--mono);
+  }
+  .badge-CRITICAL { background: var(--critical); color: white; }
+  .badge-HIGH { background: var(--high); color: #1f1300; }
+  .badge-MEDIUM { background: var(--medium); color: #1f1a00; }
+  .badge-LOW, .badge-INFO { background: var(--low); color: white; }
+  .badge-skip { background: var(--surface-2); color: var(--text-dim); }
+  .badge-ok { background: var(--accent-dim); color: #a7f3d0; }
+
+  .report { padding: 20px 28px; min-height: 400px; overflow-x: auto; }
+  .report .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .report .download-btn { width: auto; padding: 8px 16px; font-size: 13px; margin: 0; }
+  .report h1 { font-size: 22px; margin-bottom: 8px; border: none; }
+  .report h2 { font-size: 18px; margin: 24px 0 12px; color: var(--accent); }
+  .report h3 { font-size: 15px; margin: 20px 0 10px; color: var(--text); }
+  .report p { margin-bottom: 12px; }
+  .report code { font-family: var(--mono); background: var(--surface-2); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  .report pre { background: var(--surface-2); padding: 12px; border-radius: 6px; overflow-x: auto; margin-bottom: 12px; font-family: var(--mono); font-size: 13px; }
+  .report ul, .report ol { margin: 12px 0 12px 24px; }
+  .report li { margin-bottom: 4px; }
+  .report strong { color: var(--accent); }
+  .report em { color: var(--text-dim); }
+  .report hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+  .report table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+  .report th, .report td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  .report th { background: var(--surface-2); font-weight: 600; color: var(--text-dim); }
+  .report td code { font-size: 12px; }
+
+  .placeholder { color: var(--text-dim); font-size: 14px; font-style: italic; padding: 40px 20px; text-align: center; }
+
+  .summary-counts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .count-chip { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; font-family: var(--mono); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>lovable<span>_</span>audit</h1>
+    <p class="tagline">Security scanner for apps built with Lovable (React + Supabase). <a href="https://github.com/wojtekwoz/lovable-audit" target="_blank">GitHub →</a></p>
+  </header>
+
+  <div id="banner" class="banner" style="display:none"></div>
+
+  <div class="card" id="form-card">
+    <form id="scan-form">
+      <label for="url">Target URL</label>
+      <input type="url" id="url" name="url" required placeholder="https://yourapp.com" autocomplete="url">
+
+      <details>
+        <summary>Advanced options (credentials, aggressive mode, skip)</summary>
+        <div class="row">
+          <div>
+            <label for="credentials">Test account (email:password)</label>
+            <input type="text" id="credentials" placeholder="test@example.com:pw">
+            <p class="hint">Enables auth-required checks (RLS cross-tenant, privesc, monetization).</p>
+          </div>
+          <div>
+            <label for="supabase_key">Supabase anon key override</label>
+            <input type="text" id="supabase_key" placeholder="eyJhbGciOi...">
+            <p class="hint">Only if auto-detection fails.</p>
+          </div>
+        </div>
+        <div class="toggle">
+          <input type="checkbox" id="aggressive">
+          <div>
+            <label for="aggressive">Aggressive mode</label>
+            <p class="hint">Enables destructive checks (12 wrong-password logins, stored-XSS canary rows). Only on apps you own.</p>
+          </div>
+        </div>
+      </details>
+
+      <button type="submit" id="run-btn">Run scan</button>
+    </form>
+  </div>
+
+  <div id="results" style="display:none">
+    <div class="results">
+      <div class="card checklist">
+        <h2>Checks</h2>
+        <div id="check-list"></div>
+        <div id="summary-counts" class="summary-counts" style="margin-top: 16px;"></div>
+      </div>
+      <div class="card report" id="report">
+        <div class="placeholder" id="report-placeholder">Waiting for checks to complete…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CHECK_ORDER = [
+  "Security headers",
+  "CORS configuration",
+  "Exposed secrets",
+  "TLS/HSTS",
+  "DNS hygiene",
+  "Claude review",
+  "Discovery",
+  "Authentication",
+  "RLS probing",
+  "Brute-force rate limit",
+  "Prompt injection",
+  "Privilege escalation",
+  "Monetization bypass",
+  "Stored XSS",
+];
+
+const checkState = new Map();
+let finalMarkdown = null;
+let finalHost = null;
+
+function renderChecks() {
+  const list = document.getElementById('check-list');
+  list.innerHTML = '';
+  for (const name of CHECK_ORDER) {
+    const state = checkState.get(name);
+    const row = document.createElement('div');
+    row.className = 'check-item';
+    let icon = '⋯', badgeHtml = '', title = '';
+    if (state) {
+      if (state.error) { icon = '!'; badgeHtml = `<span class="check-badge badge-CRITICAL">ERROR</span>`; title = state.error; }
+      else if (state.skipped) { icon = '—'; badgeHtml = `<span class="check-badge badge-skip">skipped</span>`; title = state.skip_reason || ''; }
+      else if (state.findings && state.findings.length) {
+        icon = '✗';
+        const counts = {};
+        for (const f of state.findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
+        badgeHtml = Object.entries(counts).map(([s, n]) => `<span class="check-badge badge-${s}">${n} ${s}</span>`).join(' ');
+      }
+      else { icon = '✓'; badgeHtml = `<span class="check-badge badge-ok">OK</span>`; }
+    }
+    row.innerHTML = `<div class="check-icon">${icon}</div><div class="check-name" title="${title.replace(/"/g, '&quot;')}">${name}</div>${badgeHtml}`;
+    list.appendChild(row);
+  }
+}
+
+function renderSummary(counts) {
+  const el = document.getElementById('summary-counts');
+  const order = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+  el.innerHTML = '';
+  let any = false;
+  for (const sev of order) {
+    if (counts[sev] > 0) {
+      any = true;
+      const chip = document.createElement('span');
+      chip.className = `count-chip badge-${sev}`;
+      chip.textContent = `${counts[sev]} ${sev}`;
+      el.appendChild(chip);
+    }
+  }
+  if (!any) el.innerHTML = `<span class="count-chip badge-ok">Nothing found</span>`;
+}
+
+function renderReport(markdown, host, date) {
+  finalMarkdown = markdown;
+  finalHost = host;
+  const report = document.getElementById('report');
+  report.innerHTML = `
+    <div class="report-header">
+      <div><strong style="color:var(--text)">Report</strong> <span style="color:var(--text-dim)">— ${host} — ${date}</span></div>
+      <button class="download-btn" id="download-btn">Download .md</button>
+    </div>
+    <div id="report-body"></div>`;
+  document.getElementById('report-body').innerHTML = marked.parse(markdown);
+  document.getElementById('download-btn').addEventListener('click', () => {
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `AUDIT_${host}_${date}.md`;
+    a.click();
+  });
+}
+
+async function runScan(e) {
+  e.preventDefault();
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
+
+  checkState.clear();
+  finalMarkdown = null;
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('report').innerHTML = '<div class="placeholder">Scanning — results appear here as checks finish.</div>';
+  document.getElementById('summary-counts').innerHTML = '';
+  renderChecks();
+
+  const body = {
+    url: document.getElementById('url').value.trim(),
+    credentials: document.getElementById('credentials').value.trim() || null,
+    supabase_key: document.getElementById('supabase_key').value.trim() || null,
+    aggressive: document.getElementById('aggressive').checked,
+    skip: [],
+  };
+
+  try {
+    const res = await fetch('/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const chunk = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6);
+          try {
+            const ev = JSON.parse(data);
+            handleEvent(ev);
+          } catch (e) { console.warn('bad event', data); }
+        }
+      }
+    }
+  } catch (err) {
+    document.getElementById('report').innerHTML = `<div class="banner" style="display:block">Scan failed: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run scan';
+  }
+}
+
+function handleEvent(ev) {
+  if (ev.type === 'check') {
+    checkState.set(ev.name, ev);
+    renderChecks();
+  } else if (ev.type === 'report') {
+    renderSummary(ev.counts);
+    renderReport(ev.markdown, new URL(ev.url).hostname, ev.date);
+  } else if (ev.type === 'error') {
+    document.getElementById('report').innerHTML = `<div class="banner" style="display:block">Backend error: ${ev.message}</div>`;
+  }
+}
+
+async function healthCheck() {
+  try {
+    const r = await fetch('/healthz');
+    if (!r.ok) throw 0;
+  } catch {
+    document.getElementById('banner').style.display = 'block';
+    document.getElementById('banner').innerHTML = 'Backend not responding. Start it with <code>lovable-audit-serve</code> in your terminal.';
+  }
+}
+
+document.getElementById('scan-form').addEventListener('submit', runScan);
+healthCheck();
+</script>
+</body>
+</html>

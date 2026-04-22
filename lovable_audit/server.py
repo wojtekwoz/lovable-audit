@@ -19,9 +19,11 @@ import json
 from dataclasses import asdict
 from datetime import date
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .models import ScanContext
@@ -50,6 +52,14 @@ def _normalize(url: str) -> str:
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
     return url.rstrip("/")
+
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/")
+async def index() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/healthz")
