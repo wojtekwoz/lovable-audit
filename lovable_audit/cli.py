@@ -12,6 +12,7 @@ import click
 from rich.console import Console
 
 from . import __version__
+from .models import ScanContext
 from .report import render_markdown
 from .scanner import scan
 
@@ -53,16 +54,44 @@ def _summary_line(cr) -> str:
 @click.option("--output", "-o", type=click.Path(dir_okay=False, path_type=Path), help="Output path for markdown report.")
 @click.option("--json", "as_json", is_flag=True, help="Print machine-readable JSON to stdout instead of running the TUI.")
 @click.option("--verbose", "-v", is_flag=True, help="Print full evidence in the terminal summary.")
-def main(url: str, output: Path | None, as_json: bool, verbose: bool) -> None:
-    """Black-box security scan for apps built with Lovable.
+@click.option("--credentials", help="Test account for active checks, format: email:password")
+@click.option("--supabase-key", help="Override the Supabase anon key (if auto-detection fails).")
+@click.option("--aggressive", "-A", is_flag=True, help="Enable destructive active checks (brute-force, stored XSS).")
+@click.option("--skip", multiple=True, help="Skip a check by name. Repeatable.")
+def main(
+    url: str,
+    output: Path | None,
+    as_json: bool,
+    verbose: bool,
+    credentials: str | None,
+    supabase_key: str | None,
+    aggressive: bool,
+    skip: tuple[str, ...],
+) -> None:
+    """Black-box + active security scan for apps built with Lovable.
 
     URL: full URL of the app to scan (https:// auto-added).
     """
     url = _normalize_url(url)
     host = urlparse(url).hostname or "unknown"
 
+    creds: tuple[str, str] | None = None
+    if credentials:
+        if ":" not in credentials:
+            raise click.BadParameter("--credentials must be email:password")
+        email, _, password = credentials.partition(":")
+        creds = (email, password)
+
+    ctx = ScanContext(
+        url=url,
+        credentials=creds,
+        supabase_key_override=supabase_key,
+        aggressive=aggressive,
+        skip=set(skip),
+    )
+
     if as_json:
-        result = asyncio.run(scan(url))
+        result = asyncio.run(scan(ctx))
         payload = {
             "url": result.url,
             "date": date.today().isoformat(),
@@ -85,7 +114,7 @@ def main(url: str, output: Path | None, as_json: bool, verbose: bool) -> None:
     def on_progress(cr):
         console.print(f"  {_symbol(cr)} {cr.name} [dim]— {_summary_line(cr)}[/dim]")
 
-    result = asyncio.run(scan(url, on_progress=on_progress))
+    result = asyncio.run(scan(ctx, on_progress=on_progress))
 
     # Render report
     md = render_markdown(result)

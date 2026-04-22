@@ -1,15 +1,24 @@
 # Raport Audytu Bezpieczeństwa — {{ url }}
-## Wersja automatyczna (FREE)
+## Wersja automatyczna (FREE + aktywne testy)
 
 **Data:** {{ date }}
-**Cel:** Automated pre-launch scan (black-box, URL-only)
+**Cel:** Automated pre-launch scan (passive + active)
 **Narzędzie:** lovable-audit
+
+{% if result.supabase_url %}
+**Wykryta infrastruktura:** Supabase ({{ result.supabase_url }}){% if result.supabase_anon_key_found %} + anon key{% endif %}
+{% endif %}
+{% if result.authenticated %}
+**Zalogowany test account:** TAK — aktywne testy wymagające sesji zostały wykonane.
+{% elif result.findings|selectattr('source', 'equalto', 'active')|list %}
+**Zalogowany test account:** nie — aktywne testy auth-only pominięte.
+{% endif %}
 
 ---
 
 ## Podsumowanie Wykonawcze
 
-Przeskanowano **{{ url }}**. Znaleziono **{{ result.findings|length }}** podatności.
+Przeskanowano **{{ url }}**. Znaleziono **{{ result.findings|length }}** podatności ({{ result.findings|selectattr('source', 'equalto', 'passive')|list|length }} passive + {{ result.findings|selectattr('source', 'equalto', 'active')|list|length }} active).
 
 ### Klasyfikacja Ryzyka
 
@@ -24,7 +33,7 @@ Przeskanowano **{{ url }}**. Znaleziono **{{ result.findings|length }}** podatno
 {% if result.count('CRITICAL') > 0 or result.count('HIGH') > 0 %}
 **Zalecenie:** Nie wdrażaj do produkcji przed naprawą znalezisk CRITICAL i HIGH.
 {% else %}
-**Zalecenie:** Podstawowa higiena OK. Pamiętaj — to tylko black-box scan (patrz niżej: co NIE jest sprawdzane).
+**Zalecenie:** Podstawowa higiena OK. Pamiętaj — to wciąż smoke scan, nie pełny pentest.
 {% endif %}
 
 ---
@@ -35,10 +44,10 @@ Przeskanowano **{{ url }}**. Znaleziono **{{ result.findings|length }}** podatno
 {% if grouped[sev] %}
 ### {{ severity_pl[sev] }} ({{ grouped[sev]|length }})
 
-| # | Nazwa | CVSS | Evidence |
-|---|-------|------|----------|
+| # | Źródło | Nazwa | CVSS | Evidence |
+|---|--------|-------|------|----------|
 {% for f in grouped[sev] %}
-| {{ f.id }} | {{ f.title }} | {{ f.cvss or '—' }} | {{ f.evidence }} |
+| {{ f.id }} | {{ f.source }} | {{ f.title }} | {{ f.cvss or '—' }} | {{ f.evidence }} |
 {% endfor %}
 
 **Rekomendacje:**
@@ -54,9 +63,11 @@ Przeskanowano **{{ url }}**. Znaleziono **{{ result.findings|length }}** podatno
 
 ## Status Checków
 
+### Passive (statyczne)
+
 | Check | Status |
 |-------|--------|
-{% for c in result.checks %}
+{% for c in result.checks if c.source == 'passive' %}
 {% if c.error %}
 | {{ c.name }} | BŁĄD: {{ c.error }} |
 {% elif c.skipped %}
@@ -68,35 +79,57 @@ Przeskanowano **{{ url }}**. Znaleziono **{{ result.findings|length }}** podatno
 {% endif %}
 {% endfor %}
 
+### Active (wymagają wysyłania requestów)
+
+| Check | Status |
+|-------|--------|
+{% for c in result.checks if c.source == 'active' %}
+{% if c.error %}
+| {{ c.name }} | BŁĄD: {{ c.error }} |
+{% elif c.skipped %}
+| {{ c.name }} | Pominięty ({{ c.skip_reason }}) |
+{% elif c.findings %}
+| {{ c.name }} | {{ c.findings|length }} znalezisk |
+{% else %}
+| {{ c.name }} | OK (nic nie znaleziono) |
+{% endif %}
+{% endfor %}
+
 ---
 
-## Co NIE jest sprawdzane automatycznie
+## Ograniczenia tego skanu
 
-To narzędzie wykonuje tylko black-box scan (sam URL, bez logowania). Nie wykrywa:
+Aktywne checki to **smoke scan, nie pełny pentest**. Konkretnie:
 
-- **Obejścia monetyzacji** — limity generowania/projektów egzekwowane po stronie klienta (wymaga zalogowanego konta)
-- **Stored XSS** — wstrzyknięcie HTML/JS w pola formularzy (wymaga testowania ręcznego)
-- **Eskalacji uprawnień** — manipulacja JWT, rolami (wymaga zalogowanego konta)
-- **Prompt injection** — wycieki system promptu przez pola AI (phase 2)
-- **Brute force / rate limiting** — ochrona logowania i rejestracji (wymaga testów autoryzowanych)
-- **Row Level Security** — poprawność polityk RLS w Supabase (wymaga anon key + testów)
+- **RLS probing** — testuje hardcoded listę nazw tabel (profiles, users, messages, itp.), nie fuzzuje kolumn. Custom schemas mogą być pominięte.
+- **Rate limit** — jedna końcówka (Supabase auth), jedno IP. Prawdziwy tester rotuje IP/User-Agent.
+- **Prompt injection** — mała lista payloadów, detekcja po frazach kluczowych. Dobrze zabezpieczony agent wyjdzie "czysto".
+- **Stored XSS** — bez headless browsera. Wykrywa tylko bezpośrednią reflekcję w HTML; DOM-sink XSS ominięty. Wiersze testowe **NIE są automatycznie usuwane** (patrz finding `XSS-CLEANUP`).
+- **Privilege escalation** — trzy kanoniczne tricki (alg:none, role flip, sub swap). Business-logic flaws pominięte.
+- **Monetization bypass** — greps po angielskich nazwach zmiennych, cap na 5 wywołań. Zobfuskowane bundle mogą być missed.
 
-Dla tych kategorii: zleć pełny audyt (manual pentest) albo zapytaj w społeczności Vibe Hero.
+### Co nadal wymaga manualnego pentestu
+
+- Email change / account takeover flows
+- CSRF / SSRF
+- Race conditions (np. podwójny zakup)
+- Logika biznesowa specyficzna dla aplikacji
+- Social engineering / phishing surface
 
 ---
 
 ## Następne Kroki
 
 {% if result.count('CRITICAL') > 0 %}
-1. **P0** — napraw wszystkie znaleziska CRITICAL (przede wszystkim wyeksponowane klucze API).
+1. **P0** — napraw wszystkie znaleziska CRITICAL (przede wszystkim RLS gaps, JWT validation, wyeksponowane klucze).
 {% endif %}
 {% if result.count('HIGH') > 0 %}
-2. **P1** — uzupełnij nagłówki bezpieczeństwa i popraw CORS (HIGH).
+2. **P1** — nagłówki, rate-limit, CSP, monetization enforcement po stronie serwera.
 {% endif %}
 {% if result.count('MEDIUM') > 0 %}
 3. **P2** — adresuj znaleziska MEDIUM przed publicznym launchem.
 {% endif %}
-4. Po poprawkach: uruchom `lovable-audit` ponownie i potwierdź, że wszystko na zielono.
+4. Po poprawkach: uruchom `lovable-audit --aggressive --credentials ...` ponownie i potwierdź, że wszystko na zielono.
 
 ---
 

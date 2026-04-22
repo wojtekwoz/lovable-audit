@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from .models import ScanContext
 from .report import render_markdown
 from .scanner import scan
 
@@ -39,6 +40,10 @@ app.add_middleware(
 
 class ScanRequest(BaseModel):
     url: str = Field(..., description="Full URL including scheme")
+    credentials: str | None = Field(None, description="email:password for active auth checks")
+    supabase_key: str | None = None
+    aggressive: bool = False
+    skip: list[str] = Field(default_factory=list)
 
 
 def _normalize(url: str) -> str:
@@ -56,6 +61,19 @@ async def healthz() -> dict[str, str]:
 async def scan_endpoint(req: ScanRequest) -> StreamingResponse:
     url = _normalize(req.url)
 
+    creds: tuple[str, str] | None = None
+    if req.credentials and ":" in req.credentials:
+        email, _, password = req.credentials.partition(":")
+        creds = (email, password)
+
+    ctx = ScanContext(
+        url=url,
+        credentials=creds,
+        supabase_key_override=req.supabase_key,
+        aggressive=req.aggressive,
+        skip=set(req.skip),
+    )
+
     queue: asyncio.Queue = asyncio.Queue()
 
     def on_progress(cr):
@@ -72,7 +90,7 @@ async def scan_endpoint(req: ScanRequest) -> StreamingResponse:
 
     async def run_scan():
         try:
-            result = await scan(url, on_progress=on_progress)
+            result = await scan(ctx, on_progress=on_progress)
             queue.put_nowait(
                 {
                     "type": "report",
