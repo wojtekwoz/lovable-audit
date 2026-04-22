@@ -19,6 +19,34 @@ from bs4 import BeautifulSoup
 from ..models import Finding
 
 MODEL = "claude-sonnet-4-6"
+
+
+def _extract_json_array(text: str):
+    """Extract a JSON array from mixed output (prose, code fences, etc.)."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # Strip code fences
+    if "```" in text:
+        inside = text.split("```", 2)
+        if len(inside) >= 2:
+            candidate = inside[1]
+            if candidate.startswith("json"):
+                candidate = candidate[4:]
+            try:
+                return json.loads(candidate.strip())
+            except json.JSONDecodeError:
+                pass
+    # Find first `[` / last `]`
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end > start:
+        try:
+            return json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            return None
+    return None
 MAX_BUNDLES = 5
 MAX_CHARS_PER_BUNDLE = 40_000  # keep prompt bounded
 SYSTEM_PROMPT = """You review JavaScript bundles from web apps for security issues a regex scanner would miss.
@@ -35,7 +63,9 @@ Do NOT flag:
 - Public config (e.g. Stripe publishable key pk_*)
 - Normal React/framework code
 
-Return ONLY valid JSON: a list of findings. Each finding:
+Return ONLY a raw JSON array. No prose before or after. No markdown code fences. The first character of your response MUST be `[` and the last `]`.
+
+Each finding in the array:
 {
   "severity": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
   "title": "short Polish title",
@@ -103,16 +133,8 @@ async def run(url: str, client: httpx.AsyncClient) -> tuple[list[Finding], str |
         block.text for block in resp.content if getattr(block, "type", None) == "text"
     ).strip()
 
-    # Strip markdown code fences if present
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text
-        if text.endswith("```"):
-            text = text.rsplit("```", 1)[0]
-        text = text.strip()
-
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
+    parsed = _extract_json_array(text)
+    if parsed is None:
         return [], f"Claude zwrócił nieparsowany JSON ({len(text)} znaków)"
 
     if not isinstance(parsed, list):
